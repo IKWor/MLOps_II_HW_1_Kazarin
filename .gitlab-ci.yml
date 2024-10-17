@@ -1,0 +1,46 @@
+image: docker:latest
+services:
+  - docker:dind
+
+stages:
+  - build
+  - lint
+  - test
+  - publish
+  - documentation
+
+variables:
+  DOCKER_DRIVER: overlay2
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+
+# Сборка Docker-образа и его публикация в GitLab Docker Registry
+build:
+  stage: build
+  script:
+    - docker build -t $IMAGE_TAG .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push $IMAGE_TAG
+
+# Линтеринг и форматирование кода
+lint:
+  stage: lint
+  image: python:3.9
+  script:
+    - pip install flake8 black
+    - black --check .
+    - flake8 .
+
+# Сборка и публикация Python-пакета в GitLab PyPI Registry
+publish:
+  stage: publish
+  script:
+    - pip install twine
+    - python setup.py sdist bdist_wheel
+    - twine upload --repository-url https://gitlab.com/api/v4/projects/<project_id>/packages/pypi dist/*
+
+# Генерация и публикация документации с использованием Quarto
+documentation:
+  stage: documentation
+  image: quarto-dev/quarto:latest
+  script:
+    - quarto publish gh-pages
